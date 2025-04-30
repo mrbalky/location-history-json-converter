@@ -43,6 +43,11 @@ else:
     shapely_available = True
 
 
+def _get_iso_timestamp(s, fieldName):
+    if not fieldName in s:
+        fieldName = "timestamp"
+    return str(int(isoparse(s[fieldName]).timestamp()))
+
 def _get_timestampms(s):
     if "timestampMs" in s:
         return s["timestampMs"]
@@ -119,6 +124,9 @@ def _write_header(output, format, js_variable, separator):
         return
 
     if format == "csvfull":
+        print(separator.join([
+            "Time", "Latitude", "Longitude", "Accuracy", "Altitude", "VerticalAccuracy", "Velocity", "Heading"
+        ]) + "\n");
         output.write(separator.join([
             "Time", "Latitude", "Longitude", "Accuracy", "Altitude", "VerticalAccuracy", "Velocity", "Heading"
         ]) + "\n")
@@ -129,6 +137,12 @@ def _write_header(output, format, js_variable, separator):
             "Time", "Latitude", "Longitude", "Accuracy", "Altitude", "VerticalAccuracy", "Velocity", "Heading",
             "DetectedActivties", "UNKNOWN", "STILL", "TILTING", "ON_FOOT", "WALKING", "RUNNING", "IN_VEHICLE",
             "ON_BICYCLE", "IN_ROAD_VEHICLE", "IN_RAIL_VEHICLE", "IN_TWO_WHEELER_VEHICLE", "IN_FOUR_WHEELER_VEHICLE"
+        ]) + "\n")
+        return
+
+    if format == "csvunixtime":
+        output.write(separator.join([
+            "Time", "DeviceTime", "ServerTime", "Latitude", "Longitude", "Accuracy", "Altitude", "VerticalAccuracy", "Velocity", "Heading"
         ]) + "\n")
         return
 
@@ -193,6 +207,20 @@ def _write_location(output, format, location, separator, first, last_location):
     if format == "csvfull":
         output.write(separator.join([
             datetime.utcfromtimestamp(int(_get_timestampms(location)) / 1000).strftime("%Y-%m-%d %H:%M:%S"),
+            "%.8f" % (location["latitudeE7"] / 10000000),
+            "%.8f" % (location["longitudeE7"] / 10000000),
+            str(location.get("accuracy", "")),
+            str(location.get("altitude", "")),
+            str(location.get("verticalAccuracy", "")),
+            str(location.get("velocity", "")),
+            str(location.get("heading", ""))
+        ]) + "\n")
+
+    if format == "csvunixtime":
+        output.write(separator.join([
+            _get_iso_timestamp(location, "timestamp"),
+            _get_iso_timestamp(location, "deviceTimestamp"),
+            _get_iso_timestamp(location, "serverTimestamp"),
             "%.8f" % (location["latitudeE7"] / 10000000),
             "%.8f" % (location["longitudeE7"] / 10000000),
             str(location.get("accuracy", "")),
@@ -402,8 +430,7 @@ def convert(locations, output, format="kml",
         if "longitudeE7" not in item or "latitudeE7" not in item or (("timestampMs" not in item) and ("timestamp" not in item)):
             continue
 
-        time = datetime.utcfromtimestamp(int(_get_timestampms(item)) / 1000)
-        print("\r%s / Locations written: %s" % (time.strftime("%Y-%m-%d %H:%M"), added), end="")
+        time = datetime.fromtimestamp(int(_get_timestampms(item)) / 1000, UTC)
 
         if accuracy is not None and "accuracy" in item and item["accuracy"] > accuracy:
             continue
@@ -433,6 +460,7 @@ def convert(locations, output, format="kml",
             first = False
         last_loc = item
         added = added + 1
+        print("\r%s / Locations written: %s" % (time.strftime("%Y-%m-%d %H:%M"), added), end="")
 
     _write_footer(output, format)
     print("")
@@ -446,7 +474,7 @@ def main():
     arg_parser.add_argument(
         "-f",
         "--format",
-        choices=["kml", "json", "js", "jsonfull", "jsfull", "csv", "csvfull", "csvfullest", "gpx", "gpxtracks"],
+        choices=["kml", "json", "js", "jsonfull", "jsfull", "csv", "csvfull", "csvfullest", "gpx", "gpxtracks", "csvunixtime"],
         default="kml",
         help="Format of the output"
     )
@@ -526,7 +554,7 @@ def main():
             print("-----------------------------------")
             print("Please note that iterative mode doesn't really work when chronological is activated,")
             print("since all locations need to be fetched first to be able to sort them.")
-            print("The setting might also be unnessary since recent Google Takeout data already seems properly sorted.")
+            print("The setting might also be unnecessary since recent Google Takeout data already seems properly sorted.")
             print("")
             print("If you need to use this setting you can instead create a smaller JSON file")
             print("using jsonfull format with filters for start date, end date and accuracy in iterative mode:")
@@ -599,4 +627,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-    
