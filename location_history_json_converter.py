@@ -46,12 +46,18 @@ else:
 def _get_iso_timestamp(s, fieldName):
     if not fieldName in s:
         fieldName = "timestamp"
-    return str(int(isoparse(s[fieldName]).timestamp()))
+    return isoparse(s[fieldName])
 
 def _get_timestampms(s):
     if "timestampMs" in s:
         return s["timestampMs"]
     return str(int(isoparse(s["timestamp"]).timestamp() * 1000))
+
+def _display_timestamp(time, unixtime_output):
+    if unixtime_output:
+        return str(int(time.timestamp()))
+    else:
+        return time.strftime("%Y-%m-%d %H:%M:%S")
 
 def _valid_date(s):
     try:
@@ -136,13 +142,8 @@ def _write_header(output, format, js_variable, separator):
         output.write(separator.join([
             "Time", "Latitude", "Longitude", "Accuracy", "Altitude", "VerticalAccuracy", "Velocity", "Heading",
             "DetectedActivties", "UNKNOWN", "STILL", "TILTING", "ON_FOOT", "WALKING", "RUNNING", "IN_VEHICLE",
-            "ON_BICYCLE", "IN_ROAD_VEHICLE", "IN_RAIL_VEHICLE", "IN_TWO_WHEELER_VEHICLE", "IN_FOUR_WHEELER_VEHICLE"
-        ]) + "\n")
-        return
-
-    if format == "csvunixtime":
-        output.write(separator.join([
-            "Time", "DeviceTime", "ServerTime", "Latitude", "Longitude", "Accuracy", "Altitude", "VerticalAccuracy", "Velocity", "Heading"
+            "ON_BICYCLE", "IN_ROAD_VEHICLE", "IN_RAIL_VEHICLE", "IN_TWO_WHEELER_VEHICLE", "IN_FOUR_WHEELER_VEHICLE",
+            "DeviceTime", "ServerTime", "DeviceTag"
         ]) + "\n")
         return
 
@@ -166,8 +167,10 @@ def _write_header(output, format, js_variable, separator):
         return
 
 
-def _write_location(output, format, location, separator, first, last_location):
+def _write_location(output, format, time, location, separator, first, last_location, unixtime_output):
     """Writes the data for one location to output according to specified format"""
+
+    displayTime = _display_timestamp(time, unixtime_output)
 
     if format == "json" or format == "js":
         if not first:
@@ -195,32 +198,16 @@ def _write_location(output, format, location, separator, first, last_location):
         output.write(json.dumps(location, separators=(',', ':')))
         return
         
-    
-
     if format == "csv":
         output.write(separator.join([
-            datetime.utcfromtimestamp(int(_get_timestampms(location)) / 1000).strftime("%Y-%m-%d %H:%M:%S"),
+            displayTime,
             "%.8f" % (location["latitudeE7"] / 10000000),
             "%.8f" % (location["longitudeE7"] / 10000000)
         ]) + "\n")
 
     if format == "csvfull":
         output.write(separator.join([
-            datetime.utcfromtimestamp(int(_get_timestampms(location)) / 1000).strftime("%Y-%m-%d %H:%M:%S"),
-            "%.8f" % (location["latitudeE7"] / 10000000),
-            "%.8f" % (location["longitudeE7"] / 10000000),
-            str(location.get("accuracy", "")),
-            str(location.get("altitude", "")),
-            str(location.get("verticalAccuracy", "")),
-            str(location.get("velocity", "")),
-            str(location.get("heading", ""))
-        ]) + "\n")
-
-    if format == "csvunixtime":
-        output.write(separator.join([
-            _get_iso_timestamp(location, "timestamp"),
-            _get_iso_timestamp(location, "deviceTimestamp"),
-            _get_iso_timestamp(location, "serverTimestamp"),
+            displayTime,
             "%.8f" % (location["latitudeE7"] / 10000000),
             "%.8f" % (location["longitudeE7"] / 10000000),
             str(location.get("accuracy", "")),
@@ -232,7 +219,7 @@ def _write_location(output, format, location, separator, first, last_location):
 
     if format == "csvfullest":
         output.write(separator.join([
-            datetime.utcfromtimestamp(int(_get_timestampms(location)) / 1000).strftime("%Y-%m-%d %H:%M:%S"),
+            displayTime,
             "%.8f" % (location["latitudeE7"] / 10000000),
             "%.8f" % (location["longitudeE7"] / 10000000),
             str(location.get("accuracy", "")),
@@ -257,16 +244,22 @@ def _write_location(output, format, location, separator, first, last_location):
                 str(a.get("IN_RAIL_VEHICLE", "")),
                 str(a.get("IN_TWO_WHEELER_VEHICLE", "")),
                 str(a.get("IN_FOUR_WHEELER_VEHICLE", ""))
-            ]) + "\n")
+            ]))
         else:
-            output.write("0" + separator.join([""] * 13) + "\n")
+            output.write("0" + separator.join([""] * 13))
+        output.write(separator.join([
+            _display_timestamp(_get_iso_timestamp(location, "deviceTimestamp"), unixtime_output),
+            _display_timestamp(_get_iso_timestamp(location, "serverTimestamp"), unixtime_output),
+            str(location.get("deviceTag", ""))
+        ]))
+        output.write("\n")
+
 
     if format == "kml":
         output.write("    <Placemark>\n")
 
         # Order of these tags is important to make valid KML: TimeStamp, ExtendedData, then Point
         output.write("      <TimeStamp><when>")
-        time = datetime.utcfromtimestamp(int(_get_timestampms(location)) / 1000)
         output.write(time.strftime("%Y-%m-%dT%H:%M:%SZ"))
         output.write("</when></TimeStamp>\n")
         if "accuracy" in location or "speed" in location or "altitude" in location:
@@ -299,7 +292,6 @@ def _write_location(output, format, location, separator, first, last_location):
         if "altitude" in location:
             output.write("    <ele>%d</ele>\n" % location["altitude"])
 
-        time = datetime.utcfromtimestamp(int(_get_timestampms(location)) / 1000)
         output.write("    <time>%s</time>\n" % time.strftime("%Y-%m-%dT%H:%M:%SZ"))
         output.write("    <desc>%s" % time.strftime("%Y-%m-%d %H:%M:%S"))
         if "accuracy" in location or "speed" in location:
@@ -341,7 +333,6 @@ def _write_location(output, format, location, separator, first, last_location):
 
         if "altitude" in location:
             output.write("        <ele>%d</ele>\n" % location["altitude"])
-        time = datetime.utcfromtimestamp(int(_get_timestampms(location)) / 1000)
         output.write("        <time>%s</time>\n" % time.strftime("%Y-%m-%dT%H:%M:%SZ"))
         if "accuracy" in location or "speed" in location:
             output.write("        <desc>\n")
@@ -377,7 +368,7 @@ def _write_footer(output, format):
 def convert(locations, output, format="kml",
             js_variable="locationJsonData", separator=",",
             start_date=None, end_date=None, accuracy=None, polygon=None,
-            chronological=False):
+            chronological=False, unixtime_output=False):
     """Converts the provided locations to the specified format
 
     Parameters
@@ -454,7 +445,7 @@ def convert(locations, output, format="kml",
         if item["longitudeE7"] > 1800000000:
             item["longitudeE7"] = item["longitudeE7"] - 4294967296
 
-        _write_location(output, format, item, separator, first, last_loc)
+        _write_location(output, format, time, item, separator, first, last_loc, unixtime_output)
 
         if first:
             first = False
@@ -474,7 +465,7 @@ def main():
     arg_parser.add_argument(
         "-f",
         "--format",
-        choices=["kml", "json", "js", "jsonfull", "jsfull", "csv", "csvfull", "csvfullest", "gpx", "gpxtracks", "csvunixtime"],
+        choices=["kml", "json", "js", "jsonfull", "jsfull", "csv", "csvfull", "csvfullest", "gpx", "gpxtracks"],
         default="kml",
         help="Format of the output"
     )
@@ -493,7 +484,13 @@ def main():
 
     arg_parser.add_argument(
         "-c", "--chronological",
-        help="Sort items in chronological order (might be unnessary)",
+        help="Sort items in chronological order (might be unnecessary)",
+        action="store_true"
+    )
+
+    arg_parser.add_argument(
+        "-u", "--unixtime",
+        help="Output timestamps in unixtime instead of a string (For CSV output only)",
         action="store_true"
     )
 
@@ -610,6 +607,10 @@ def main():
             args.enddate = args.enddate + timedelta(hours=args.endtime.hour,minutes=args.endtime.minute) - timedelta(microseconds=1)
         else:
             args.enddate = args.enddate.replace(hour=23, minute=59, second=59, microsecond=999999)
+    if args.unixtime:
+        unixtime_output = True
+    else:
+        unixtime_output = False
 
     convert(
         items, f_out,
@@ -619,7 +620,8 @@ def main():
         end_date=args.enddate,
         accuracy=args.accuracy,
         polygon=polygon,
-        chronological=args.chronological
+        chronological=args.chronological,
+        unixtime_output=unixtime_output
     )
 
     f_out.close()
