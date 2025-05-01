@@ -130,9 +130,6 @@ def _write_header(output, format, js_variable, separator):
         return
 
     if format == "csvfull":
-        print(separator.join([
-            "Time", "Latitude", "Longitude", "Accuracy", "Altitude", "VerticalAccuracy", "Velocity", "Heading"
-        ]) + "\n");
         output.write(separator.join([
             "Time", "Latitude", "Longitude", "Accuracy", "Altitude", "VerticalAccuracy", "Velocity", "Heading"
         ]) + "\n")
@@ -607,10 +604,6 @@ def main():
             args.enddate = args.enddate + timedelta(hours=args.endtime.hour,minutes=args.endtime.minute) - timedelta(microseconds=1)
         else:
             args.enddate = args.enddate.replace(hour=23, minute=59, second=59, microsecond=999999)
-    if args.unixtime:
-        unixtime_output = True
-    else:
-        unixtime_output = False
 
     convert(
         items, f_out,
@@ -621,7 +614,7 @@ def main():
         accuracy=args.accuracy,
         polygon=polygon,
         chronological=args.chronological,
-        unixtime_output=unixtime_output
+        unixtime_output=args.unixtime
     )
 
     f_out.close()

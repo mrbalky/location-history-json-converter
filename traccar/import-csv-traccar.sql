@@ -5,17 +5,32 @@ FIELDS
   LINES TERMINATED BY '\n'
 IGNORE 1 ROWS (
   @timestamp,
-  @deviceTime,
-  @serverTime,
   @lat,
   @lon,
   @accuracy,
   @altitude,
   @verticalAccuracy,
   @velocity,
-  @heading
+  @heading,
+  @detectedActivities,
+  @unknown,
+  @still,
+  @tilting,
+  @onFoot,
+  @walking,
+  @running,
+  @inVehicle,
+  @onBicycle,
+  @inRoadVehicle,
+  @inRailVehicle,
+  @inTwoWheeler,
+  @inFourWheeler,
+  @deviceTime,
+  @serverTime,
+  @deviceTag
 ) SET
-  deviceid=(select id from tc_devices where uniqueid='$DEVICE_ID'),
+  -- TODO: Some kind of option to use the device tag in the CSV
+  deviceid=(select id from tc_devices where uniqueid='$DEVICE_TAG'),
   servertime=from_unixtime(@serverTime),
   devicetime=from_unixtime(@deviceTime),
   fixtime=from_unixtime(@timestamp),
@@ -26,5 +41,6 @@ IGNORE 1 ROWS (
   speed=@velocity,
   course=@heading,
   accuracy=@accuracy,
+  -- TODO: Use the activity data somehow
   attributes=IF(LENGTH(@heading)>0, "{\"motion\":true}", "{}");
 
